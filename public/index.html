@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>世界旅人打卡地圖</title>
+  
+  <!-- Leaflet 地圖樣式庫 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- 繁簡中文轉換庫 (OpenCC) -->
+  <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/bundle-node.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+    }
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* 頂部視角切換列 */
+    .control-panel {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+      padding: 6px;
+      border-radius: 30px;
+      display: flex;
+      gap: 6px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .tab-btn {
+      border: none;
+      background: transparent;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #64748b;
+    }
+
+    .tab-btn.active {
+      background: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+    }
+
+    /* 左下角資訊與暱稱設定徽章 */
+    .badge {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+      padding: 12px 18px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.5;
+    }
+
+    .edit-name-btn {
+      margin-left: 8px;
+      color: #2563eb;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      text-decoration: underline;
+    }
+
+    /* 自訂地圖彈窗樣式 */
+    .custom-popup-title {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .custom-popup-user {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .custom-popup-msg {
+      font-size: 13px;
+      color: #1e293b;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 視角切換按鈕 -->
+  <div class="control-panel">
+    <button id="btn-all" class="tab-btn active" onclick="switchView('all')">🌍 全球旅人地圖</button>
+    <button id="btn-my" class="tab-btn" onclick="switchView('my')">📍 我的足跡地圖</button>
+  </div>
+
+  <!-- 打卡統計與使用者身分資訊 -->
+  <div class="badge" id="stats-badge">載入中...</div>
+
+  <!-- 地圖容器 -->
+  <div id="map"></div>
+
+  <!-- Leaflet 核心 JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // 1. 安全初始化繁體轉換器（加 try/catch 防崩潰）
+    let toTraditional = (text) => text; // 預設原樣回傳
+    try {
+    if (window.OpenCC) {
+        toTraditional = OpenCC.Converter({ from: 'cn', to: 'tw' });
+    }
+    } catch (e) {
+    console.warn('OpenCC 繁簡庫載入略過，使用原文字串');
+    }
+
+    // 2. 初始化使用者身分 (localStorage)
+    let currentUserId = localStorage.getItem('world_map_user_id');
+    if (!currentUserId) {
+    currentUserId = 'user_' + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('world_map_user_id', currentUserId);
+    }
+
+    let currentUserName = localStorage.getItem('world_map_user_name') || '';
+    let currentView = 'all';
+    let allCheckins = [];
+
+    // 3. 初始化地圖（確保 DOM 載入後執行）
+    const map = L.map('map', {
+    center: [23.5, 121],
+    zoom: 4,
+    minZoom: 2
+    });
+
+    // 使用標準穩定圖資
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+
+// 解決容器高度未即時計算問題
+    setTimeout(() => {
+    map.invalidateSize();
+    }, 200);
+
+    // 建立彩色 SVG Pin
+    function createPinIcon(color = '#2563eb') {
+      return L.divIcon({
+        className: 'custom-pin',
+        html: `
+          <svg width="28" height="38" viewBox="0 0 24 36" style="filter: drop-shadow(0 2px 5px rgba(0,0,0,0.35));">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}"/>
+            <circle cx="12" cy="12" r="4.5" fill="#ffffff"/>
+          </svg>
+        `,
+        iconSize: [28, 38],
+        iconAnchor: [14, 38],
+        popupAnchor: [0, -34]
+      });
+    }
+
+    // 4. 繪製標記至地圖與更新狀態列
+    function renderMarkers() {
+      markersLayer.clearLayers();
+
+      const filtered = (currentView === 'my')
+        ? allCheckins.filter(item => item.userId === currentUserId)
+        : allCheckins;
+
+      filtered.forEach(item => {
+        const isMine = item.userId === currentUserId;
+        const popupContent = `
+          <div>
+            <div class="custom-popup-title">📍 ${escapeHtml(item.country)} · ${escapeHtml(item.city)}</div>
+            <div class="custom-popup-user" style="color: ${item.color || '#2563eb'};">
+              ${escapeHtml(item.user)} ${isMine ? '(我)' : ''}
+            </div>
+            <div class="custom-popup-msg">${escapeHtml(item.message || '無打卡留言')}</div>
+          </div>
+        `;
+        L.marker([item.lat, item.lng], { icon: createPinIcon(item.color) })
+          .addTo(markersLayer)
+          .bindPopup(popupContent);
+      });
+
+      const myCount = allCheckins.filter(item => item.userId === currentUserId).length;
+      const displayName = currentUserName ? escapeHtml(currentUserName) : '未設定 (點擊打卡將自動設定)';
+      
+      const statsText = currentView === 'my' 
+        ? `🚩 我的足跡：共 <b>${myCount}</b> 個地點`
+        : `🌍 全球打卡：<b>${allCheckins.length}</b> 筆（我的打卡：${myCount} 筆）`;
+
+      document.getElementById('stats-badge').innerHTML = `
+        <div>${statsText}</div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+          👤 當前旅人：<b>${displayName}</b>
+          ${currentUserName ? `<button class="edit-name-btn" onclick="changeNickname()">修改</button>` : ''}
+        </div>
+      `;
+    }
+
+    // 5. 切換視角模式
+    function switchView(view) {
+      currentView = view;
+      document.getElementById('btn-all').classList.toggle('active', view === 'all');
+      document.getElementById('btn-my').classList.toggle('active', view === 'my');
+      renderMarkers();
+    }
+
+    // 6. 手動修改暱稱並同步更新過去所有打卡紀錄
+    async function changeNickname() {
+        const newName = prompt('請輸入新的旅人暱稱：', currentUserName);
+        if (!newName || !newName.trim() || newName.trim() === currentUserName) return;
+
+        const trimmedName = newName.trim();
+
+    try {
+        // 1. 通知後端更新該使用者所有打卡點的暱稱
+        const res = await fetch(`/api/checkins/user/${currentUserId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: trimmedName })
+        });
+
+        if (res.ok) {
+        // 2. 本地儲存新暱稱
+        currentUserName = trimmedName;
+        localStorage.setItem('world_map_user_name', currentUserName);
+
+        // 3. 即時更新前端記憶體中的打卡點名稱
+        allCheckins.forEach(item => {
+            if (item.userId === currentUserId) {
+            item.user = currentUserName;
+            }
+        });
+
+        // 4. 重新繪製地圖標記與彈窗
+        renderMarkers();
+        } else {
+        alert('暱稱同步失敗，請稍後再試！');
+        }
+    } catch (err) {
+        console.error('更新暱稱失敗:', err);
+        alert('網路連線異常，無法同步暱稱');
+    }
+    }
+
+    // 7. 載入伺服器打卡資料
+    async function loadData() {
+      try {
+        const res = await fetch('/api/checkins');
+        allCheckins = await res.json();
+        renderMarkers();
+      } catch (err) {
+        console.error('載入打卡資料失敗:', err);
+      }
+    }
+
+    // 8. 點擊地圖打卡事件
+    map.on('click', async (e) => {
+      const { lat, lng } = e.latlng;
+
+      // 若使用者尚未設定暱稱，先引導設定一次
+      if (!currentUserName) {
+        const inputName = prompt('歡迎初次打卡！請先設定您的旅人暱稱：', '台灣旅人');
+        if (!inputName || !inputName.trim()) return;
+        currentUserName = inputName.trim();
+        localStorage.setItem('world_map_user_name', currentUserName);
+        renderMarkers();
+      }
+
+      let country = "未知國家";
+      let city = "未知地點";
+
+      // 呼叫 Nominatim 反向地理編碼
+      try {
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=zh-TW,zh-Hant,zh,en`,
+          { headers: { 'User-Agent': 'WorldMapCheckinApp/1.0' } }
+        );
+        const geoData = await geoRes.json();
+        const addr = geoData.address || {};
+        
+        const rawCountry = addr.country || "未知國家";
+        const rawCity = addr.city || addr.borough || addr.state || addr.municipality || addr.province || addr.county || addr.region || addr.town || "未知地點";
+
+        // 強制轉換為繁體中文
+        country = toTraditional(rawCountry);
+        city = toTraditional(rawCity);
+      } catch (err) {
+        console.warn('反查地點失敗:', err);
+      }
+
+      // 直接跳出打卡心得輸入框（不再重複問暱稱）
+      const message = prompt(`📍 地點：${country} · ${city}\n👤 旅人：${currentUserName}\n\n請輸入打卡心得：`);
+      if (message === null) return; // 點擊取消則不新增
+
+      try {
+        const res = await fetch('/api/checkins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUserId,
+            lat,
+            lng,
+            country,
+            city,
+            user: currentUserName,
+            message: message.trim(),
+            color: '#ef4444' // 預設新增為紅色標記
+          })
+        });
+
+        if (res.ok) {
+          const newPoint = await res.json();
+          allCheckins.push(newPoint);
+          renderMarkers();
+        }
+      } catch (err) {
+        console.error('打卡儲存失敗:', err);
+      }
+    });
+
+    // 簡易 XSS 防護
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
