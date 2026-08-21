@@ -280,12 +280,15 @@
     // 3. 初始化地圖
     const map = L.map('map', {
       center: [23.5, 121],
-      zoom: 4,
-      minZoom: 2
+      zoom: 3,
+      minZoom: 2,
+      maxBounds: [[-90, -180], [90, 180]],
+      maxBoundsViscosity: 1.0
     });
 
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      noWrap: true,
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
@@ -428,9 +431,12 @@
       pendingCheckin = null;
     });
 
-    // 點擊地圖打卡事件（加入極速解析與非同步載入優化）
-    map.on('click', async (e) => {
-      const { lat, lng } = e.latlng;
+    // 點擊地圖打卡事件
+      map.on('click', async (e) => {
+  // ✅ 使用 .wrap() 自動將經度限制在 -180 到 +180 的合法地球座標內
+      const wrappedLatLng = e.latlng.wrap();
+      const lat = wrappedLatLng.lat;
+      const lng = wrappedLatLng.lng;
 
       if (!currentUserName) {
         const inputName = prompt('歡迎初次打卡！請先設定您的旅人暱稱：', '台灣旅人');
@@ -440,7 +446,7 @@
         renderMarkers();
       }
 
-      // 1. 先打開彈窗避免卡頓
+      // 先打開彈窗
       pendingCheckin = { lat, lng, country: "查詢中...", city: "查詢中..." };
       modalLocationText.textContent = `📍 正在反查地點... ｜ 👤 旅人：${currentUserName}`;
       modalMessageInput.value = '';
@@ -450,53 +456,28 @@
       let country = "未知國家";
       let city = "未知地點";
 
-      // 2. 設定 3.5 秒超時控制器，大幅降低網路逾時卡死的機率
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
       try {
-        // 加入 zoom=10 讓 Nominatim 只抓縣市層級，提升 3~5 倍查詢速度
-        const geoRes = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=zh-TW,zh-Hant,zh,en`,
-          { 
-            headers: { 'User-Agent': 'WorldMapCheckinApp/1.0 (contact: student@travelmap.local)' },
-            signal: controller.signal
-          }
-        );
-        clearTimeout(timeoutId);
-
+        // 👉 改呼叫自己的後端代理 API，穩定且不被 OSM 阻擋
+        const geoRes = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
-          const addr = geoData.address || {};
-          
-          const rawCountry = addr.country || "未知國家";
-          const rawCity = 
-            addr.city || 
-            addr.town || 
-            addr.borough || 
-            addr.suburb || 
-            addr.municipality || 
-            addr.city_district || 
-            addr.county || 
-            addr.state || 
-            addr.province || 
-            addr.village || 
-            "未知地點";
-
-          country = toTraditional(rawCountry);
-          city = toTraditional(rawCity);
+          country = toTraditional(geoData.country || "未知國家");
+          city = toTraditional(geoData.city || "未知地點");
         }
       } catch (err) {
-        console.warn('反查地點超時或失敗，採用預設值:', err);
+        console.warn('反查地點失敗:', err);
       }
 
-      // 3. 更新暫存與彈窗標題
+      // 更新彈窗
       pendingCheckin = { lat, lng, country, city };
       modalLocationText.textContent = `📍 ${country} · ${city} ｜ 👤 旅人：${currentUserName}`;
-    });
+      // 👉 請確認 map.on('click') 下方是否有這段確認按鈕監聽：
+    modalSubmitBtn.onclick = async () => {
+      if (!pendingCheckin || modalSubmitBtn.disabled) return;
 
-    modalSubmitBtn.addEventListener('click', async () => {
-      if (!pendingCheckin) return;
+      // 1. 立即停用按鈕防止連點
+      modalSubmitBtn.disabled = true;
+      modalSubmitBtn.textContent = '儲存中...';
 
       const message = modalMessageInput.value.trim();
 
@@ -510,9 +491,9 @@
             lng: pendingCheckin.lng,
             country: pendingCheckin.country,
             city: pendingCheckin.city,
-            user: currentUserName,
+            user: currentUserName || '匿名旅人',
             message: message,
-            color: selectedColor
+            color: selectedColor || '#2563eb'
           })
         });
 
@@ -528,8 +509,15 @@
         }
       } catch (err) {
         console.error('打卡儲存失敗:', err);
+      } finally {
+        // 2. 恢復按鈕狀態
+        modalSubmitBtn.disabled = false;
+        modalSubmitBtn.textContent = '確認打卡';
       }
+    };
     });
+
+
 
     // 簡易 XSS 防護
     function escapeHtml(str) {
