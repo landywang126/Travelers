@@ -331,8 +331,17 @@
               ${escapeHtml(item.user)} ${isMine ? '(我)' : ''}
             </div>
             <div class="custom-popup-msg">${escapeHtml(item.message || '無打卡留言')}</div>
-          </div>
-        `;
+            ${isMine ? `
+              <div style="margin-top: 8px; text-align: right;">
+                <button 
+                  onclick="handleDeleteCheckin('${item.id}')"
+                  style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                  刪除打卡
+                </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
         L.marker([item.lat, item.lng], { icon: createPinIcon(item.color) })
           .addTo(markersLayer)
           .bindPopup(popupContent);
@@ -517,6 +526,33 @@
     };
     });
 
+    async function handleDeleteCheckin(id) {
+      if (!confirm('確定要刪除這筆打卡紀錄嗎？')) return;
+
+      const currentUserId = localStorage.getItem('world_map_user_id');
+
+      try {
+        const res = await fetch(`/api/checkins/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ userId: currentUserId })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || '刪除失敗');
+        }
+
+        alert('打卡已刪除！');
+        location.reload();
+      } catch (err) {
+        console.error('刪除失敗:', err);
+        alert(`刪除失敗：${err.message}`);
+      }
+    }
+    window.handleDeleteCheckin = handleDeleteCheckin;
 
 
     // 簡易 XSS 防護

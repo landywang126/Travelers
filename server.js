@@ -139,6 +139,33 @@ app.patch('/api/checkins/user/:userId', async (req, res) => {
   }
 });
 
+app.delete('/api/checkins/:id', async (req, res) => {
+  const { id } = req.params;
+  const userId = req.body?.userId; // 使用可選鏈運算子（Optional Chaining）
+
+  try {
+    let deleteSql = `DELETE FROM checkins WHERE id = $1`;
+    let values = [id];
+
+    if (userId) {
+      deleteSql += ` AND user_id = $2`;
+      values.push(userId);
+    }
+
+    deleteSql += ` RETURNING id`;
+    const result = await pool.query(deleteSql, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: '找不到該筆打卡紀錄或無權限刪除' });
+    }
+
+    res.json({ message: '打卡紀錄已刪除', id: result.rows[0].id });
+  } catch (err) {
+    console.error('SQL 刪除失敗:', err);
+    res.status(500).json({ error: '資料庫刪除失敗' });
+  }
+});
+
 
   // 簡易反查快取
 const geoCache = new Map();
