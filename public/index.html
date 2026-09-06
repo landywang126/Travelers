@@ -224,6 +224,32 @@
 
   <!-- 地圖容器 -->
   <div id="map"></div>
+    <!-- 右上角統計看板 -->
+  <!-- 右上角統計看板 -->
+  <div id="statsPanel" style="position: absolute; top: 20px; right: 20px; z-index: 1000; background: white; padding: 14px 18px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 180px; font-family: sans-serif;">
+    <div id="statPanelTitle" style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1e293b;">📊 旅人足跡總覽</div>
+    <div style="font-size: 13px; color: #475569; margin-bottom: 4px;">總打卡點：<strong id="statTotalCheckins" style="color: #2563eb;">-</strong></div>
+    <div style="font-size: 13px; color: #475569; margin-bottom: 8px;">探索國家：<strong id="statTotalCountries" style="color: #2563eb;">-</strong></div>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 8px 0;">
+    <div style="font-size: 12px; font-weight: bold; color: #64748b; margin-bottom: 6px;">🏆 熱門國家 Top 5</div>
+    <ol id="statTopList" style="margin: 0; padding-left: 18px; font-size: 12px; color: #334155; line-height: 1.6;"></ol>
+  </div>
+
+  <div id="searchContainer" style="position: absolute; top: 20px; left: 70px; z-index: 1000;">
+    <form id="searchForm" onsubmit="handleSearch(event)" style="display: flex; gap: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); border-radius: 24px; background: white; padding: 4px;">
+      <input 
+        type="text" 
+        id="searchInput" 
+        placeholder="搜尋地名、城市或景點..." 
+        style="padding: 8px 14px; border: none; outline: none; border-radius: 20px; width: 220px; font-size: 14px;"
+      />
+      <button 
+        type="submit" 
+        style="padding: 8px 16px; border-radius: 20px; border: none; background: #2563eb; color: white; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.2s;">
+        搜尋
+      </button>
+    </form>
+  </div>
   
   <!-- 打卡彈窗 Modal -->
   <div id="checkinModal" class="modal-overlay hidden">
@@ -252,7 +278,7 @@
       </div>
     </div>
   </div>
-
+ 
   <!-- Leaflet 核心 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -369,6 +395,7 @@
       document.getElementById('btn-all').classList.toggle('active', view === 'all');
       document.getElementById('btn-my').classList.toggle('active', view === 'my');
       renderMarkers();
+      loadStats();
     }
 
     // 6. 手動修改暱稱並同步更新過去所有打卡紀錄
@@ -439,6 +466,41 @@
       modal.classList.add('hidden');
       pendingCheckin = null;
     });
+
+  async function handleSearch(e) {
+    e.preventDefault();
+    const inputEl = document.getElementById('searchInput');
+    const query = inputEl.value.trim();
+    if (!query) return;
+
+    try {
+      // 加入繁體中文語系偏好與 URL 編碼
+      const url = `https://nominatim.openstreetmap.org/search?format=json&accept-language=zh-TW,zh&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const results = await res.json();
+
+      if (!results || results.length === 0) {
+        alert('找不到該地點，請嘗試輸入更具體的地名（例如：台北101、東京、羅馬競技場）');
+        return;
+      }
+
+      // 取得第一筆最佳符合結果
+      const bestMatch = results[0];
+      const lat = parseFloat(bestMatch.lat);
+      const lon = parseFloat(bestMatch.lon);
+
+      // 平滑縮放並飛向目的地（縮放層級設為 12）
+      map.flyTo([lat, lon], 12, {
+        duration: 1.8
+      });
+
+      // 清空輸入框
+      inputEl.blur();
+    } catch (err) {
+      console.error('中文搜尋失敗:', err);
+      alert('搜尋服務暫時無法連線，請稍後再試！');
+    }
+  }
 
     // 點擊地圖打卡事件
       map.on('click', async (e) => {
@@ -553,6 +615,55 @@
       }
     }
     window.handleDeleteCheckin = handleDeleteCheckin;
+
+   async function loadStats() {
+  try {
+    const isMyView = currentView === 'my';
+    const currentUserId = localStorage.getItem('world_map_user_id');
+    
+    const url = isMyView && currentUserId 
+      ? `/api/stats?userId=${encodeURIComponent(currentUserId)}` 
+      : '/api/stats';
+
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // 安全取得 DOM 元素
+    const panelTitle = document.getElementById('statPanelTitle');
+    const totalCheckinsEl = document.getElementById('statTotalCheckins');
+    const totalCountriesEl = document.getElementById('statTotalCountries');
+    const topList = document.getElementById('statTopList');
+
+    if (panelTitle) {
+      panelTitle.innerText = isMyView ? '📊 我的足跡總覽' : '🌏 全球旅人總覽';
+    }
+    if (totalCheckinsEl) {
+      totalCheckinsEl.innerText = `${data.totalCheckins} 筆`;
+    }
+    if (totalCountriesEl) {
+      totalCountriesEl.innerText = `${data.totalCountries} 國`;
+    }
+
+    if (topList) {
+      topList.innerHTML = '';
+      if (data.topCountries && data.topCountries.length > 0) {
+        data.topCountries.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.country} (${item.count} 次)`;
+          topList.appendChild(li);
+        });
+      } else {
+        topList.innerHTML = '<li style="list-style: none; color: #94a3b8;">暫無紀錄</li>';
+      }
+    }
+  } catch (err) {
+    console.error('統計數據載入失敗:', err);
+  }
+}
+
+// 頁面載入時執行
+loadStats();
 
 
     // 簡易 XSS 防護

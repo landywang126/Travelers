@@ -248,6 +248,54 @@ app.get('/api/geocode/reverse', async (req, res) => {
   }
 });
 
+// GET: 支援全球統計或個人統計 (/api/stats 或 /api/stats?userId=xxx)
+app.get('/api/stats', async (req, res) => {
+  const { userId } = req.query;
+
+  try {
+    // 判斷是否需要按個人身分過濾
+    const whereClause = userId ? 'WHERE user_id = $1' : '';
+    const topWhereClause = userId 
+      ? "WHERE user_id = $1 AND country IS NOT NULL AND country <> '未知國家'"
+      : "WHERE country IS NOT NULL AND country <> '未知國家'";
+    const queryParams = userId ? [userId] : [];
+
+    const overviewSql = `
+      SELECT 
+        COUNT(*)::int AS "totalCheckins",
+        COUNT(DISTINCT country)::int AS "totalCountries"
+      FROM checkins
+      ${whereClause};
+    `;
+
+    const topCountriesSql = `
+      SELECT 
+        country, 
+        COUNT(*)::int AS count
+      FROM checkins
+      ${topWhereClause}
+      GROUP BY country
+      ORDER BY count DESC
+      LIMIT 5;
+    `;
+
+    const [overviewResult, topCountriesResult] = await Promise.all([
+      pool.query(overviewSql, queryParams),
+      pool.query(topCountriesSql, queryParams)
+    ]);
+
+    res.json({
+      isPersonal: Boolean(userId),
+      totalCheckins: overviewResult.rows[0].totalCheckins,
+      totalCountries: overviewResult.rows[0].totalCountries,
+      topCountries: topCountriesResult.rows
+    });
+  } catch (err) {
+    console.error('統計查詢失敗:', err);
+    res.status(500).json({ error: '無法讀取統計數據' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`伺服器運行中：http://localhost:${PORT}`);
 });
