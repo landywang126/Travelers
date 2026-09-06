@@ -204,6 +204,60 @@
       cursor: pointer;
       font-weight: 600;
     }
+
+    
+    @media (max-width: 600px) {
+      #searchContainer {
+        top: 10px !important;
+        left: 55px !important;
+        right: 12px !important;
+      }
+
+      #searchForm {
+        width: 100% !important;
+        display: flex !important;
+      }
+
+      #searchInput {
+        width: 100% !important;
+        flex: 1 !important;
+        font-size: 13px !important;
+        padding: 6px 10px !important;
+      }
+      .control-panel {
+        top: 60px !important;
+        left: 12px !important;
+        display: flex !important;
+        gap: 6px !important;
+      }
+
+      .tab-btn {
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+      }
+      #statsPanel {
+        top: 105px !important;
+        right: 12px !important;
+        left: auto !important;
+        padding: 8px 12px !important;
+        min-width: 140px !important;
+        max-width: 170px !important;
+        max-height: 180px !important;
+        overflow-y: auto !important;
+      }
+
+      #statPanelTitle {
+        font-size: 12px !important;
+        margin-bottom: 4px !important;
+      }
+      #stats-badge {
+        bottom: 25px !important;
+        left: 12px !important;
+        right: 12px !important;
+        font-size: 12px !important;
+        padding: 8px 12px !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -273,6 +327,8 @@
       </div>
     </div>
   </div>
+
+
  
   <!-- Leaflet 核心 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
