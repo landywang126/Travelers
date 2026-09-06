@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>世界旅人打卡地圖</title>
   
-  <!-- Leaflet 地圖樣式庫 -->
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
-  <!-- 繁簡中文轉換庫 (OpenCC) -->
+  <!-- traditional Chinese (OpenCC) -->
   <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/core.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/bundle-node.min.js"></script>
 
@@ -29,7 +29,6 @@
       width: 100%;
     }
 
-    /* 頂部視角切換列 */
     .control-panel {
       position: absolute;
       top: 16px;
@@ -63,7 +62,6 @@
       box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
     }
 
-    /* 左下角資訊與暱稱設定徽章 */
     .badge {
       position: absolute;
       bottom: 20px;
@@ -89,7 +87,6 @@
       text-decoration: underline;
     }
 
-    /* 自訂地圖彈窗樣式 */
     .custom-popup-title {
       font-size: 11px;
       color: #64748b;
@@ -106,7 +103,7 @@
       line-height: 1.4;
     }
 
-    /* 打卡彈窗遮罩與外框 */
+   
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -145,7 +142,6 @@
       font-weight: 500;
     }
     
-    /* 色票選擇器 */
     .color-picker-label {
       font-size: 0.85rem;
       color: #475569;
@@ -172,7 +168,6 @@
       transform: scale(1.2);
     }
 
-    /* 輸入框與操作按鈕 */
     .modal-textarea {
       width: 100%;
       height: 80px;
@@ -213,19 +208,19 @@
 </head>
 <body>
 
-  <!-- 視角切換按鈕 -->
+  <!-- view changing -->
   <div class="control-panel">
     <button id="btn-all" class="tab-btn active" onclick="switchView('all')">🌍 全球旅人地圖</button>
     <button id="btn-my" class="tab-btn" onclick="switchView('my')">📍 我的足跡地圖</button>
   </div>
 
-  <!-- 打卡統計與使用者身分資訊 -->
+  <!-- users -->
   <div class="badge" id="stats-badge">載入中...</div>
 
-  <!-- 地圖容器 -->
+  <!-- map -->
   <div id="map"></div>
-    <!-- 右上角統計看板 -->
-  <!-- 右上角統計看板 -->
+
+  <!-- statistics -->
   <div id="statsPanel" style="position: absolute; top: 20px; right: 20px; z-index: 1000; background: white; padding: 14px 18px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 180px; font-family: sans-serif;">
     <div id="statPanelTitle" style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1e293b;">📊 旅人足跡總覽</div>
     <div style="font-size: 13px; color: #475569; margin-bottom: 4px;">總打卡點：<strong id="statTotalCheckins" style="color: #2563eb;">-</strong></div>
@@ -259,7 +254,7 @@
         <div id="modalLocationText" class="modal-location">地點載入中...</div>
       </div>
 
-      <div>
+       <div>
         <div class="color-picker-label">選擇地標顏色</div>
         <div class="color-options">
           <div class="color-dot active" data-color="#2563eb" style="background: #2563eb;"></div>
@@ -282,7 +277,6 @@
   <!-- Leaflet 核心 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1. 安全初始化繁體轉換器
     let toTraditional = (text) => text;
     try {
       if (window.OpenCC) {
@@ -292,7 +286,7 @@
       console.warn('OpenCC 繁簡庫載入略過，使用原文字串');
     }
 
-    // 2. 初始化使用者身分 (localStorage)
+    // users
     let currentUserId = localStorage.getItem('world_map_user_id');
     if (!currentUserId) {
       currentUserId = 'user_' + Math.random().toString(36).substring(2, 9);
@@ -303,7 +297,7 @@
     let currentView = 'all';
     let allCheckins = [];
 
-    // 3. 初始化地圖
+    // maps
     const map = L.map('map', {
       center: [23.5, 121],
       zoom: 3,
@@ -324,7 +318,7 @@
       map.invalidateSize();
     }, 200);
 
-    // 建立彩色 SVG Pin
+    // SVG Pin
     function createPinIcon(color = '#2563eb') {
       return L.divIcon({
         className: 'custom-pin',
@@ -340,7 +334,7 @@
       });
     }
 
-    // 4. 繪製標記至地圖與更新狀態列
+    // map drawing
     function renderMarkers() {
       markersLayer.clearLayers();
 
@@ -389,7 +383,7 @@
       `;
     }
 
-    // 5. 切換視角模式
+    // view changing
     function switchView(view) {
       currentView = view;
       document.getElementById('btn-all').classList.toggle('active', view === 'all');
@@ -398,7 +392,7 @@
       loadStats();
     }
 
-    // 6. 手動修改暱稱並同步更新過去所有打卡紀錄
+    // editing 
     async function changeNickname() {
       const newName = prompt('請輸入新的旅人暱稱：', currentUserName);
       if (!newName || !newName.trim() || newName.trim() === currentUserName) return;
@@ -432,7 +426,7 @@
       }
     }
 
-    // 7. 載入伺服器打卡資料
+    // load data
     async function loadData() {
       try {
         const res = await fetch('/api/checkins');
@@ -443,7 +437,7 @@
       }
     }
 
-    // 8. 彈窗元素綁定與色票切換邏輯
+    // color chooser
     const modal = document.getElementById('checkinModal');
     const modalLocationText = document.getElementById('modalLocationText');
     const modalMessageInput = document.getElementById('modalMessageInput');
@@ -467,44 +461,37 @@
       pendingCheckin = null;
     });
 
-  async function handleSearch(e) {
-    e.preventDefault();
-    const inputEl = document.getElementById('searchInput');
-    const query = inputEl.value.trim();
-    if (!query) return;
+    async function handleSearch(e) {
+      e.preventDefault();
+      const inputEl = document.getElementById('searchInput');
+      const query = inputEl.value.trim();
+      if (!query) return;
 
-    try {
-      // 加入繁體中文語系偏好與 URL 編碼
-      const url = `https://nominatim.openstreetmap.org/search?format=json&accept-language=zh-TW,zh&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url);
-      const results = await res.json();
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&accept-language=zh-TW,zh&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url);
+        const results = await res.json();
 
-      if (!results || results.length === 0) {
-        alert('找不到該地點，請嘗試輸入更具體的地名（例如：台北101、東京、羅馬競技場）');
-        return;
+        if (!results || results.length === 0) {
+          alert('找不到該地點，請嘗試輸入更具體的地名（例如：台北101、東京、羅馬競技場）');
+          return;
+        }
+
+
+        const bestMatch = results[0];
+        const lat = parseFloat(bestMatch.lat);
+        const lon = parseFloat(bestMatch.lon);
+        map.flyTo([lat, lon], 12, {
+          duration: 1.8
+        });
+        inputEl.blur();
+      } catch (err) {
+        console.error('中文搜尋失敗:', err);
+        alert('搜尋服務暫時無法連線，請稍後再試！');
       }
-
-      // 取得第一筆最佳符合結果
-      const bestMatch = results[0];
-      const lat = parseFloat(bestMatch.lat);
-      const lon = parseFloat(bestMatch.lon);
-
-      // 平滑縮放並飛向目的地（縮放層級設為 12）
-      map.flyTo([lat, lon], 12, {
-        duration: 1.8
-      });
-
-      // 清空輸入框
-      inputEl.blur();
-    } catch (err) {
-      console.error('中文搜尋失敗:', err);
-      alert('搜尋服務暫時無法連線，請稍後再試！');
     }
-  }
 
-    // 點擊地圖打卡事件
-      map.on('click', async (e) => {
-  // ✅ 使用 .wrap() 自動將經度限制在 -180 到 +180 的合法地球座標內
+    map.on('click', async (e) => {
       const wrappedLatLng = e.latlng.wrap();
       const lat = wrappedLatLng.lat;
       const lng = wrappedLatLng.lng;
@@ -517,7 +504,6 @@
         renderMarkers();
       }
 
-      // 先打開彈窗
       pendingCheckin = { lat, lng, country: "查詢中...", city: "查詢中..." };
       modalLocationText.textContent = `📍 正在反查地點... ｜ 👤 旅人：${currentUserName}`;
       modalMessageInput.value = '';
@@ -528,7 +514,6 @@
       let city = "未知地點";
 
       try {
-        // 👉 改呼叫自己的後端代理 API，穩定且不被 OSM 阻擋
         const geoRes = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
@@ -539,16 +524,12 @@
         console.warn('反查地點失敗:', err);
       }
 
-      // 更新彈窗
       pendingCheckin = { lat, lng, country, city };
       modalLocationText.textContent = `📍 ${country} · ${city} ｜ 👤 旅人：${currentUserName}`;
-      // 👉 請確認 map.on('click') 下方是否有這段確認按鈕監聽：
-    modalSubmitBtn.onclick = async () => {
+      modalSubmitBtn.onclick = async () => {
       if (!pendingCheckin || modalSubmitBtn.disabled) return;
-
-      // 1. 立即停用按鈕防止連點
-      modalSubmitBtn.disabled = true;
-      modalSubmitBtn.textContent = '儲存中...';
+        modalSubmitBtn.disabled = true;
+        modalSubmitBtn.textContent = '儲存中...';
 
       const message = modalMessageInput.value.trim();
 
@@ -581,7 +562,6 @@
       } catch (err) {
         console.error('打卡儲存失敗:', err);
       } finally {
-        // 2. 恢復按鈕狀態
         modalSubmitBtn.disabled = false;
         modalSubmitBtn.textContent = '確認打卡';
       }
@@ -616,63 +596,59 @@
     }
     window.handleDeleteCheckin = handleDeleteCheckin;
 
-   async function loadStats() {
-  try {
-    const isMyView = currentView === 'my';
-    const currentUserId = localStorage.getItem('world_map_user_id');
-    
-    const url = isMyView && currentUserId 
-      ? `/api/stats?userId=${encodeURIComponent(currentUserId)}` 
-      : '/api/stats';
+    async function loadStats() {
+    try {
+      const isMyView = currentView === 'my';
+      const currentUserId = localStorage.getItem('world_map_user_id');
+      
+      const url = isMyView && currentUserId 
+        ? `/api/stats?userId=${encodeURIComponent(currentUserId)}` 
+        : '/api/stats';
 
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const data = await res.json();
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
 
-    // 安全取得 DOM 元素
-    const panelTitle = document.getElementById('statPanelTitle');
-    const totalCheckinsEl = document.getElementById('statTotalCheckins');
-    const totalCountriesEl = document.getElementById('statTotalCountries');
-    const topList = document.getElementById('statTopList');
+      const panelTitle = document.getElementById('statPanelTitle');
+      const totalCheckinsEl = document.getElementById('statTotalCheckins');
+      const totalCountriesEl = document.getElementById('statTotalCountries');
+      const topList = document.getElementById('statTopList');
 
-    if (panelTitle) {
-      panelTitle.innerText = isMyView ? '📊 我的足跡總覽' : '🌏 全球旅人總覽';
-    }
-    if (totalCheckinsEl) {
-      totalCheckinsEl.innerText = `${data.totalCheckins} 筆`;
-    }
-    if (totalCountriesEl) {
-      totalCountriesEl.innerText = `${data.totalCountries} 國`;
-    }
-
-    if (topList) {
-      topList.innerHTML = '';
-      if (data.topCountries && data.topCountries.length > 0) {
-        data.topCountries.forEach(item => {
-          const li = document.createElement('li');
-          li.textContent = `${item.country} (${item.count} 次)`;
-          topList.appendChild(li);
-        });
-      } else {
-        topList.innerHTML = '<li style="list-style: none; color: #94a3b8;">暫無紀錄</li>';
+      if (panelTitle) {
+        panelTitle.innerText = isMyView ? '📊 我的足跡總覽' : '🌏 全球旅人總覽';
       }
-    }
-  } catch (err) {
-    console.error('統計數據載入失敗:', err);
-  }
-}
+      if (totalCheckinsEl) {
+        totalCheckinsEl.innerText = `${data.totalCheckins} 筆`;
+      }
+      if (totalCountriesEl) {
+        totalCountriesEl.innerText = `${data.totalCountries} 國`;
+      }
 
-// 頁面載入時執行
+      if (topList) {
+        topList.innerHTML = '';
+        if (data.topCountries && data.topCountries.length > 0) {
+          data.topCountries.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = `${item.country} (${item.count} 次)`;
+            topList.appendChild(li);
+          });
+        } else {
+          topList.innerHTML = '<li style="list-style: none; color: #94a3b8;">暫無紀錄</li>';
+        }
+      }
+    } catch (err) {
+      console.error('統計數據載入失敗:', err);
+    }
+  }
+
 loadStats();
 
 
-    // 簡易 XSS 防護
     function escapeHtml(str) {
       return String(str).replace(/[&<>"']/g, m => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[m]));
     }
-
     loadData();
   </script>
 </body>

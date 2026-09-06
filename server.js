@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. 載入 .env 環境變數
+//.env 
 dotenv.config();
 const { Pool } = pg;
 
@@ -18,16 +18,16 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// 3. 託管 public 資料夾內的靜態網頁
+//public files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 2. 建立資料庫連線池
+//database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // 雲端 Supabase 連線必要設定
+  ssl: { rejectUnauthorized: false } 
 });
 
-// 3. 測試連線
+//connection test
 pool.connect((err, client, release) => {
   if (err) {
     console.error('❌ Supabase 連線失敗:', err.message);
@@ -37,7 +37,7 @@ pool.connect((err, client, release) => {
   }
 });
 
-// 4. GET: 讀取所有打卡點（SQL SELECT）
+//GET all the checkins（SQL SELECT）
 app.get('/api/checkins', async (req, res) => {
   try {
     const queryText = `
@@ -63,7 +63,7 @@ app.get('/api/checkins', async (req, res) => {
   }
 });
 
-// 5. POST: 新增打卡點（SQL INSERT）
+// POST（SQL INSERT）
 app.post('/api/checkins', async (req, res) => {
   const { userId, lat, lng, country, city, user, message, color } = req.body;
 
@@ -118,7 +118,7 @@ app.patch('/api/checkins/user/:userId', async (req, res) => {
   const newName = user.trim();
 
   try {
-    // 執行 SQL UPDATE 語法更新暱稱
+    // nickname updating
     const updateSql = `
       UPDATE checkins
       SET user_name = $1
@@ -127,7 +127,7 @@ app.patch('/api/checkins/user/:userId', async (req, res) => {
 
     const result = await pool.query(updateSql, [newName, userId]);
 
-    // result.rowCount 會告訴你這次 SQL 指令總共修改了幾筆打卡資料
+    // result.rowCount 
     res.json({
       message: "暱稱同步成功",
       updatedCount: result.rowCount,
@@ -141,7 +141,7 @@ app.patch('/api/checkins/user/:userId', async (req, res) => {
 
 app.delete('/api/checkins/:id', async (req, res) => {
   const { id } = req.params;
-  const userId = req.body?.userId; // 使用可選鏈運算子（Optional Chaining）
+  const userId = req.body?.userId; 
 
   try {
     let deleteSql = `DELETE FROM checkins WHERE id = $1`;
@@ -167,7 +167,7 @@ app.delete('/api/checkins/:id', async (req, res) => {
 });
 
 
-  // 簡易反查快取
+
 const geoCache = new Map();
 
 // GET /api/geocode/reverse
@@ -190,7 +190,6 @@ app.get('/api/geocode/reverse', async (req, res) => {
     const fetchRes = await fetch(targetUrl, {
       method: 'GET',
       headers: {
-        // 🔥 必須提供真實可識別的 User-Agent 與 Referer，否則 OSM 會直接回傳 403 阻擋
         'User-Agent': 'TravelerCheckinMapDemo/1.0 (contact: demo_student@gmail.com)',
         'Referer': 'http://localhost:3000'
       }
@@ -223,7 +222,7 @@ app.get('/api/geocode/reverse', async (req, res) => {
       addr.village ||
       data.name;
 
-    // 保底：若抓不到 city，從 display_name 切割
+ 
     if (!rawCity && data.display_name) {
       const parts = data.display_name.split(',').map(s => s.trim());
       if (parts.length >= 2) {
@@ -248,12 +247,11 @@ app.get('/api/geocode/reverse', async (req, res) => {
   }
 });
 
-// GET: 支援全球統計或個人統計 (/api/stats 或 /api/stats?userId=xxx)
+// GET: statistics (SQL SELECT)
 app.get('/api/stats', async (req, res) => {
   const { userId } = req.query;
 
   try {
-    // 判斷是否需要按個人身分過濾
     const whereClause = userId ? 'WHERE user_id = $1' : '';
     const topWhereClause = userId 
       ? "WHERE user_id = $1 AND country IS NOT NULL AND country <> '未知國家'"
